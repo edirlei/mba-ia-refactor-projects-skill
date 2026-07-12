@@ -16,6 +16,88 @@ Você deve entregar uma Skill capaz de:
 
 A skill deve ser agnóstica de tecnologia, funcionando com diferentes linguagens e frameworks.
 
+## Análise Manual
+
+Esta seção registra a análise estática manual dos três projetos fornecidos. Cada achado foi classificado conforme a escala de severidade do desafio e contém uma localização verificável no código. Nesta etapa, as aplicações ainda não foram executadas; os resultados abaixo formam a linha de base que será usada para avaliar a capacidade de detecção da Skill.
+
+### Resumo dos achados
+
+| Projeto | CRÍTICO | ALTO | MÉDIO | BAIXO | Total |
+|---|---:|---:|---:|---:|---:|
+| `code-smells-project` | 4 | 3 | 3 | 2 | 12 |
+| `ecommerce-api-legacy` | 3 | 4 | 5 | 2 | 14 |
+| `task-manager-api` | 3 | 2 | 7 | 2 | 14 |
+| **Total** | **10** | **9** | **15** | **6** | **40** |
+
+Todos os projetos superam o mínimo individual de cinco problemas e contêm, no mínimo, um achado CRÍTICO ou ALTO, dois MÉDIOS e dois BAIXOS.
+
+### Projeto 1 — `code-smells-project`
+
+Stack identificada: Python, Flask 3.1.1, Flask-CORS e SQLite. O projeto é uma API de e-commerce com 19 endpoints e quatro tabelas. A arquitetura possui uma separação apenas nominal entre `app.py`, `controllers.py`, `models.py` e `database.py`, pois regras de negócio, acesso a dados, serialização e operações administrativas continuam misturados.
+
+| Severidade | Problema e localização | Por que é relevante |
+|---|---|---|
+| **CRÍTICO** | Execução arbitrária de SQL em [`app.py:59-76`](code-smells-project/app.py#L59-L76) | O endpoint `/admin/query` executa diretamente uma string SQL recebida na requisição, sem autenticação. Um cliente pode ler, alterar ou excluir qualquer dado e até remover a estrutura do banco. |
+| **CRÍTICO** | SQL Injection generalizada em [`models.py:47-60`](code-smells-project/models.py#L47-L60), [`models.py:105-129`](code-smells-project/models.py#L105-L129) e [`models.py:285-299`](code-smells-project/models.py#L285-L299) | Dados de produtos, credenciais e filtros são concatenados em SQL. Isso permite modificar a consulta, burlar autenticação e acessar ou corromper dados. |
+| **CRÍTICO** | Senhas armazenadas e devolvidas em texto puro em [`database.py:27-33`](code-smells-project/database.py#L27-L33), [`database.py:75-82`](code-smells-project/database.py#L75-L82) e [`models.py:72-129`](code-smells-project/models.py#L72-L129) | As senhas são gravadas sem hash e aparecem nas respostas de listagem e consulta de usuários. Um acesso à API ou ao banco expõe credenciais diretamente reutilizáveis. |
+| **CRÍTICO** | Chave secreta e debug expostos em [`app.py:7-9`](code-smells-project/app.py#L7-L9), [`app.py:88`](code-smells-project/app.py#L88) e [`controllers.py:285-290`](code-smells-project/controllers.py#L285-L290) | A chave é literal, o debug permanece habilitado e o endpoint `/health` devolve a própria chave. Isso expõe configuração sensível e amplia a superfície de ataque. |
+| **ALTO** | Reset completo do banco sem autenticação em [`app.py:47-57`](code-smells-project/app.py#L47-L57) | Qualquer cliente pode chamar `/admin/reset-db` e apagar pedidos, itens, produtos e usuários. |
+| **ALTO** | God Modules e violação de MVC/SRP em [`models.py:4-314`](code-smells-project/models.py#L4-L314), [`controllers.py:5-292`](code-smells-project/controllers.py#L5-L292) e [`app.py:47-78`](code-smells-project/app.py#L47-L78) | Os módulos misturam múltiplos domínios, SQL, regras, serialização, validação, notificações e administração. Isso gera forte acoplamento e dificulta testes isolados. |
+| **ALTO** | Gerenciamento inseguro de conexão e transações em [`database.py:4-10`](code-smells-project/database.py#L4-L10) e [`models.py:133-169`](code-smells-project/models.py#L133-L169) | Uma única conexão global é compartilhada com a proteção de thread desabilitada. A criação de pedidos executa várias escritas sem rollback explícito, permitindo estado parcial após falhas. |
+| **MÉDIO** | Consultas N+1 em [`models.py:171-233`](code-smells-project/models.py#L171-L233) | Para cada pedido são consultados os itens e, para cada item, o produto. A quantidade de consultas cresce rapidamente com o volume de dados. |
+| **MÉDIO** | Banco sem restrições de integridade em [`database.py:14-53`](code-smells-project/database.py#L14-L53) | Faltam chaves estrangeiras, unicidade de e-mail e restrições de nulidade, permitindo registros órfãos e estados inválidos. |
+| **MÉDIO** | Validação e tratamento de erros inconsistentes em [`controllers.py:5-22`](code-smells-project/controllers.py#L5-L22), [`controllers.py:167-220`](code-smells-project/controllers.py#L167-L220) e [`controllers.py:237-292`](code-smells-project/controllers.py#L237-L292) | Exceções genéricas são devolvidas com detalhes internos e alguns handlers acessam JSON sem validar sua existência ou os tipos recebidos. |
+| **BAIXO** | Valores mágicos e regras espalhadas em [`controllers.py:52-54`](code-smells-project/controllers.py#L52-L54), [`controllers.py:242`](code-smells-project/controllers.py#L242) e [`models.py:256-262`](code-smells-project/models.py#L256-L262) | Categorias, status e faixas de desconto estão codificados em vários pontos, elevando o risco de alterações inconsistentes. |
+| **BAIXO** | Higiene e nomenclatura em [`database.py:2`](code-smells-project/database.py#L2), [`models.py:2`](code-smells-project/models.py#L2) e [`controllers.py:14`](code-smells-project/controllers.py#L14) | Há imports não utilizados, parâmetros chamados `id` que ocultam o built-in do Python e logging feito com `print`, reduzindo legibilidade e observabilidade. |
+
+Não foi identificada uma API claramente obsoleta no código-fonte deste projeto. A ausência desse achado é intencional: a auditoria não deve fabricar problemas apenas para atingir uma quantidade mínima.
+
+### Projeto 2 — `ecommerce-api-legacy`
+
+Stack identificada: JavaScript, Node.js, Express 4.18.2 e SQLite em memória. Apesar do nome do diretório, o domínio é uma API de LMS com checkout, cursos, matrículas e pagamentos. A classe `AppManager` concentra inicialização, rotas, persistência, pagamento, relatórios e exclusões.
+
+| Severidade | Problema e localização | Por que é relevante |
+|---|---|---|
+| **CRÍTICO** | Credenciais e chaves hardcoded em [`utils.js:1-6`](ecommerce-api-legacy/src/utils.js#L1-L6) | Usuário e senha de banco, chave de gateway e usuário SMTP estão no código. Isso expõe segredos e impede a separação segura entre ambientes. |
+| **CRÍTICO** | Cartão completo e chave do gateway registrados em log em [`AppManager.js:43-46`](ecommerce-api-legacy/src/AppManager.js#L43-L46) | Dados financeiros e credenciais podem ser armazenados em logs, observabilidade e backups, ampliando o impacto de qualquer vazamento. |
+| **CRÍTICO** | Função de senha insegura e senha padrão em [`utils.js:17-22`](ecommerce-api-legacy/src/utils.js#L17-L22) e [`AppManager.js:66-69`](ecommerce-api-legacy/src/AppManager.js#L66-L69) | A função repete Base64, trunca o resultado e usa `123456` quando a senha não é informada. Base64 não é um hash adequado para senhas. |
+| **ALTO** | God Class em [`AppManager.js:4-138`](ecommerce-api-legacy/src/AppManager.js#L4-L138) | A classe cria e popula o banco, registra rotas, processa checkout, pagamento, usuários, auditoria e relatórios. A concentração viola MVC/SRP e impede testes isolados. |
+| **ALTO** | Rotas administrativas sem autenticação em [`AppManager.js:80-137`](ecommerce-api-legacy/src/AppManager.js#L80-L137) | Qualquer cliente pode consultar dados financeiros e excluir usuários, expondo informações e permitindo operações destrutivas. |
+| **ALTO** | Checkout sem transação atômica em [`AppManager.js:50-61`](ecommerce-api-legacy/src/AppManager.js#L50-L61) | Matrícula, pagamento e auditoria são gravados sequencialmente sem rollback. Uma falha intermediária deixa o banco inconsistente. |
+| **ALTO** | Estado global mutável em [`utils.js:9-15`](ecommerce-api-legacy/src/utils.js#L9-L15) | Cache e receita global são compartilhados entre requisições, dificultando isolamento, testes e controle de memória. |
+| **MÉDIO** | Consultas N+1 no relatório em [`AppManager.js:83-127`](ecommerce-api-legacy/src/AppManager.js#L83-L127) | Cada curso consulta matrículas e cada matrícula consulta usuário e pagamento, fazendo o custo crescer com a base. |
+| **MÉDIO** | Erros de callbacks ignorados em [`AppManager.js:57-61`](ecommerce-api-legacy/src/AppManager.js#L57-L61), [`AppManager.js:92-126`](ecommerce-api-legacy/src/AppManager.js#L92-L126) e [`AppManager.js:131-136`](ecommerce-api-legacy/src/AppManager.js#L131-L136) | Diversos callbacks recebem `err`, mas continuam a execução. Isso pode causar exceções, respostas penduradas e respostas de sucesso após falhas. |
+| **MÉDIO** | Banco sem integridade referencial em [`AppManager.js:12-16`](ecommerce-api-legacy/src/AppManager.js#L12-L16) e [`AppManager.js:131-136`](ecommerce-api-legacy/src/AppManager.js#L131-L136) | Não existem foreign keys ou unicidade de e-mail, e a exclusão de usuário deixa matrículas e pagamentos órfãos. |
+| **MÉDIO** | Dependências transitivas obsoletas em [`package-lock.json:33-38`](ecommerce-api-legacy/package-lock.json#L33-L38), [`package-lock.json:827-832`](ecommerce-api-legacy/package-lock.json#L827-L832), [`package-lock.json:1074-1079`](ecommerce-api-legacy/package-lock.json#L1074-L1079) e [`package-lock.json:2113-2118`](ecommerce-api-legacy/package-lock.json#L2113-L2118) | O lockfile registra nove pacotes transitivos como deprecated, incluindo `glob`, `inflight`, `rimraf` e `tar`. A cadeia precisa ser revisada sem atualizações cegas. |
+| **MÉDIO** | Validação e pagamento superficiais em [`AppManager.js:28-48`](ecommerce-api-legacy/src/AppManager.js#L28-L48) | Senha, e-mail, IDs e cartão não são devidamente validados. O pagamento é decidido apenas pelo primeiro dígito do cartão e está acoplado à rota. |
+| **BAIXO** | Nomes abreviados em [`AppManager.js:28-35`](ecommerce-api-legacy/src/AppManager.js#L28-L35) | Variáveis como `u`, `e`, `p`, `cid` e `cc` escondem a intenção e tornam o fluxo mais difícil de revisar. |
+| **BAIXO** | Código morto e valores mágicos em [`AppManager.js:2`](ecommerce-api-legacy/src/AppManager.js#L2) e [`utils.js:6-22`](ecommerce-api-legacy/src/utils.js#L6-L22) | `totalRevenue` não é utilizado e valores como `10000`, `10`, `3000` e o prefixo `4` aparecem sem abstração ou explicação. |
+
+As consultas que recebem dados externos utilizam placeholders `?`; portanto, não foi registrado um achado de SQL Injection neste projeto.
+
+### Projeto 3 — `task-manager-api`
+
+Stack identificada: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. O projeto possui Blueprints, models e uma separação parcial em `routes`, `services` e `utils`, mas os arquivos de rotas ainda concentram regras, persistência e serialização.
+
+| Severidade | Problema e localização | Por que é relevante |
+|---|---|---|
+| **CRÍTICO** | Autenticação fictícia e elevação de privilégio em [`user_routes.py:42-86`](task-manager-api/routes/user_routes.py#L42-L86) e [`user_routes.py:185-210`](task-manager-api/routes/user_routes.py#L185-L210) | O cliente pode se cadastrar como `admin`, e o login retorna um token previsível que não é assinado nem validado pelas rotas. |
+| **CRÍTICO** | MD5 para senhas e hash exposto nas respostas em [`user.py:16-32`](task-manager-api/models/user.py#L16-L32), [`user_routes.py:27-40`](task-manager-api/routes/user_routes.py#L27-L40) e [`user_routes.py:207-210`](task-manager-api/routes/user_routes.py#L207-L210) | MD5 sem salt é inadequado para senhas, e `to_dict()` inclui o hash em respostas de consulta, criação, atualização e login. |
+| **CRÍTICO** | Segredos e credenciais hardcoded em [`app.py:11-15`](task-manager-api/app.py#L11-L15), [`app.py:33-34`](task-manager-api/app.py#L33-L34) e [`notification_service.py:7-10`](task-manager-api/services/notification_service.py#L7-L10) | A chave Flask e as credenciais SMTP estão no fonte, enquanto o servidor inicia com debug habilitado. |
+| **ALTO** | Ausência de autorização e isolamento entre usuários em [`user_routes.py:92-151`](task-manager-api/routes/user_routes.py#L92-L151), [`task_routes.py:156-238`](task-manager-api/routes/task_routes.py#L156-L238) e [`report_routes.py:12-155`](task-manager-api/routes/report_routes.py#L12-L155) | Qualquer cliente pode alterar usuários e roles, editar ou excluir tarefas e consultar relatórios de terceiros. |
+| **ALTO** | Rotas atuando como God Controllers em [`task_routes.py:1-299`](task-manager-api/routes/task_routes.py#L1-L299), [`report_routes.py:1-223`](task-manager-api/routes/report_routes.py#L1-L223) e [`user_routes.py:1-211`](task-manager-api/routes/user_routes.py#L1-L211) | As rotas acumulam HTTP, validação, regras, acesso ao ORM, transações, cálculos e serialização. A estrutura em pastas não completa a separação MVC. |
+| **MÉDIO** | Consultas N+1 em [`task_routes.py:14-57`](task-manager-api/routes/task_routes.py#L14-L57), [`report_routes.py:53-68`](task-manager-api/routes/report_routes.py#L53-L68) e [`report_routes.py:157-165`](task-manager-api/routes/report_routes.py#L157-L165) | Cada tarefa busca usuário e categoria, cada usuário busca suas tarefas e cada categoria executa uma contagem separada. |
+| **MÉDIO** | Listagens sem paginação em [`task_routes.py:11-14`](task-manager-api/routes/task_routes.py#L11-L14), [`user_routes.py:10-12`](task-manager-api/routes/user_routes.py#L10-L12) e [`report_routes.py:30`](task-manager-api/routes/report_routes.py#L30) | As consultas carregam todos os registros na memória, degradando latência e consumo conforme a base cresce. |
+| **MÉDIO** | Exceções genéricas e silenciosas em [`task_routes.py:61-63`](task-manager-api/routes/task_routes.py#L61-L63), [`task_routes.py:225-238`](task-manager-api/routes/task_routes.py#L225-L238) e [`helpers.py:43-50`](task-manager-api/utils/helpers.py#L43-L50) | Blocos `except:` escondem tanto erros esperados quanto falhas de programação, prejudicando diagnóstico e observabilidade. |
+| **MÉDIO** | Validação duplicada e helpers não utilizados em [`helpers.py:57-116`](task-manager-api/utils/helpers.py#L57-L116), [`task_routes.py:85-223`](task-manager-api/routes/task_routes.py#L85-L223) e [`user_routes.py:42-78`](task-manager-api/routes/user_routes.py#L42-L78) | Helpers e constantes já existem, mas as rotas reimplementam as mesmas regras. O Marshmallow está declarado, porém não é utilizado. |
+| **MÉDIO** | Parâmetros inválidos podem gerar erro 500 em [`task_routes.py:240-271`](task-manager-api/routes/task_routes.py#L240-L271) e [`report_routes.py:190-209`](task-manager-api/routes/report_routes.py#L190-L209) | Conversões para inteiro e acesso a JSON ocorrem sem tratamento, transformando erros do cliente em falhas internas. |
+| **MÉDIO** | APIs legadas/depreciadas em [`task_routes.py:67`](task-manager-api/routes/task_routes.py#L67), [`user_routes.py:29`](task-manager-api/routes/user_routes.py#L29), [`task.py:15-16`](task-manager-api/models/task.py#L15-L16) e [`report_routes.py:35-45`](task-manager-api/routes/report_routes.py#L35-L45) | `Query.get()` é legado no SQLAlchemy 2.x, e `datetime.utcnow()` está depreciado desde Python 3.12. O uso dificulta evolução para APIs atuais e datas conscientes de timezone. |
+| **MÉDIO** | Criação do banco como efeito colateral de importação em [`app.py:30-31`](task-manager-api/app.py#L30-L31) | `db.create_all()` roda sempre que `app.py` é importado, dificultando testes, configuração de bancos alternativos e adoção de migrations. |
+| **BAIXO** | Valores e regras mágicas duplicadas em [`task.py:38-48`](task-manager-api/models/task.py#L38-L48), [`task_routes.py:102-114`](task-manager-api/routes/task_routes.py#L102-L114), [`user_routes.py:64-72`](task-manager-api/routes/user_routes.py#L64-L72) e [`helpers.py:110-116`](task-manager-api/utils/helpers.py#L110-L116) | Status, roles, limites de senha, prioridades e cores aparecem tanto em constantes quanto em literais, permitindo divergências. |
+| **BAIXO** | Imports, métodos e serviços não utilizados em [`app.py:7`](task-manager-api/app.py#L7), [`task_routes.py:7`](task-manager-api/routes/task_routes.py#L7), [`helpers.py:1-7`](task-manager-api/utils/helpers.py#L1-L7) e [`notification_service.py:1-48`](task-manager-api/services/notification_service.py#L1-L48) | Há imports e helpers não consumidos; o serviço de notificação não está integrado às rotas, gerando ruído e falsa expectativa de funcionalidade. |
+
+Não foi identificada SQL Injection evidente neste projeto, pois o acesso ao banco é realizado pelo ORM. Como pontos positivos, o projeto já utiliza Blueprints, models separados, foreign keys em `Task`, e-mail único e rollback em vários handlers de escrita. A refatoração deverá preservar esses avanços e melhorar a separação existente, não reconstruir o sistema sem necessidade.
+
 ## Contexto
 
 ### Definição de Severidades
