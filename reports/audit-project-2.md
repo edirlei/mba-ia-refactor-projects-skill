@@ -6,8 +6,8 @@
 |---|---|
 | Projeto analisado | `ecommerce-api-legacy` |
 | Data da análise | 12/07/2026 |
-| Fases executadas | Fase 1 — Análise; Fase 2 — Auditoria e plano |
-| Fase não executada | Fase 3 — Refatoração |
+| Fases executadas | Fase 1 — Análise; Fase 2 — Auditoria e plano; Fase 3 — Refatoração e validação |
+| Status da Fase 3 | Concluída após autorização explícita do usuário |
 | Stack identificada | JavaScript/CommonJS, Node.js, Express 4.22.1 e SQLite 5.1.7 em memória |
 | Dependências declaradas | Express `^4.18.2` e SQLite3 `^5.1.6` |
 | Arquivos-fonte analisados | `src/app.js`, `src/AppManager.js`, `src/utils.js` |
@@ -23,7 +23,7 @@ Apesar do nome do diretório, o código implementa uma API de LMS com cursos, us
 
 A classe `AppManager` concentra criação do banco, seeds, rotas HTTP, validação, checkout, pagamento, auditoria, relatório e exclusão de usuários. Essa concentração combina riscos arquiteturais com problemas críticos de segurança: credenciais no fonte, dados financeiros em logs e autenticação baseada em transformação inadequada de senha.
 
-Foram identificados **14 achados**: **3 críticos**, **4 altos**, **5 médios** e **2 baixos**. Nenhum arquivo-fonte foi modificado; a Fase 3 permanece bloqueada até autorização explícita.
+Foram identificados **14 achados**: **3 críticos**, **4 altos**, **5 médios** e **2 baixos**. Na conclusão das Fases 1 e 2, nenhum arquivo-fonte havia sido modificado. A Fase 3 começou somente após autorização explícita; seus resultados estão registrados na seção 12.
 
 | Severidade | Quantidade |
 |---|---:|
@@ -373,14 +373,135 @@ Não devem ser preservados como contratos: credenciais no fonte, log de cartão/
 
 ## 10. Limitações da auditoria
 
-- A auditoria desta etapa foi estática; o boot e os endpoints não foram reexecutados durante as Fases 1 e 2.
+- As Fases 1 e 2 foram estáticas; o boot e os endpoints foram executados posteriormente na Fase 3.
 - O banco é criado em memória, portanto seu estado desaparece ao encerrar a aplicação.
-- Não existe suíte automatizada para confirmar todos os contratos assíncronos antes da Fase 3.
+- A Fase 3 criou uma suíte automatizada para os contratos assíncronos, segurança, transações e arquitetura.
 - O lockfile prova os avisos deprecated, mas a escolha de atualização/substituição exige validação de compatibilidade durante a refatoração.
 - Nenhum valor de segredo, chave ou cartão foi reproduzido neste relatório.
 
-## 11. Confirmação obrigatória antes da Fase 3
+## 11. Confirmação obrigatória antes da Fase 3 — registro histórico
 
 **Fase 2 concluída. Foram encontrados 14 achados: 3 CRÍTICOS, 4 ALTOS, 5 MÉDIOS e 2 BAIXOS.**
 
 **Deseja autorizar a Fase 3 e permitir a modificação dos arquivos do Projeto 2 para executar a refatoração proposta? Responda explicitamente com “sim” ou “não”. Sem resposta afirmativa, nenhuma refatoração deve ser iniciada.**
+
+A autorização afirmativa foi recebida antes da primeira alteração da Fase 3. A pergunta acima foi preservada como evidência da barreira humana prevista na Skill.
+
+## 12. Resultado da Fase 3
+
+### 12.1 Resumo da transformação
+
+O Projeto 2 foi reorganizado para uma arquitetura MVC adaptada ao Express. O antigo `AppManager` e o módulo global `utils.js` foram removidos. A aplicação passou a possuir composition root assíncrono, entry point explícito, routers finos, controllers independentes de HTTP/SQL, services de negócio, repositories, models, schema de validação e middlewares centrais.
+
+```text
+src/
+├── app.js                         # application factory/composition root
+├── server.js                      # entry point do npm start
+├── config/settings.js             # configuração por ambiente
+├── controllers/                   # coordenação dos casos de uso
+├── database/                      # conexão Promise + schema/seed
+├── errors/                        # erros de aplicação
+├── logging/                       # logger estruturado
+├── middlewares/                   # async, autorização e error handler
+├── models/                        # User, Course e Enrollment
+├── repositories/                  # SQL e persistência
+├── routes/                        # Views/Routes Express
+├── schemas/                       # validação do payload legado
+└── services/                      # checkout, pagamento, senha, relatório e usuário
+```
+
+A nova estrutura possui 30 arquivos-fonte e 821 linhas. O crescimento decorre principalmente da separação explícita das fronteiras e do tratamento seguro dos fluxos assíncronos. Nenhuma dependência foi adicionada.
+
+### 12.2 Tratamento dos achados
+
+| Achado | Resultado da Fase 3 |
+|---|---|
+| AP2-001 | Resolvido: configuração sensível foi removida do fonte; porta, banco, token administrativo e seed vêm do ambiente. |
+| AP2-002 | Resolvido: cartão, senha e chave não são registrados; logs usam somente evento e identificador operacional. |
+| AP2-003 | Resolvido: senha padrão removida e hashes usam `crypto.scrypt` com salt aleatório. |
+| AP2-004 | Resolvido: `AppManager` removido e responsabilidades distribuídas por MVC/services/repositories. |
+| AP2-005 | Resolvido: relatório financeiro e exclusão exigem `x-admin-token` e comparação resistente a timing. |
+| AP2-006 | Resolvido: checkout usa `BEGIN IMMEDIATE`, `COMMIT` e `ROLLBACK` para usuário, matrícula, pagamento e auditoria. |
+| AP2-007 | Resolvido: cache global removido e dependências injetadas no composition root. |
+| AP2-008 | Resolvido: relatório financeiro usa uma única consulta com JOIN e uma passagem de agregação. |
+| AP2-009 | Resolvido: callbacks SQLite foram encapsulados em Promises e erros seguem middleware central. |
+| AP2-010 | Resolvido: schema possui `NOT NULL`, `UNIQUE`, `CHECK`, foreign keys, cascatas e índices. |
+| AP2-011 | Pendente: as nove transitivas deprecated continuam no lockfile; nenhuma atualização cega foi feita junto da mudança estrutural. |
+| AP2-012 | Parcial: schema de entrada valida tipos e formatos e pagamento foi isolado; a decisão por prefixo continua sendo um adapter simulado, não um gateway real. |
+| AP2-013 | Resolvido: nomes internos foram substituídos por termos completos de domínio, preservando o payload HTTP legado. |
+| AP2-014 | Resolvido: estado/código morto removido, valores centralizados e logging estruturado. |
+
+Resultado consolidado: **12 achados resolvidos, 1 parcialmente resolvido e 1 pendente**.
+
+### 12.3 Testes automatizados
+
+Comando executado:
+
+```powershell
+npm.cmd test
+```
+
+Resultado: **15 testes aprovados**, cobrindo:
+
+- três endpoints e quatro cenários de caracterização;
+- relatório autorizado e rejeição sem token;
+- hash `scrypt` e ausência de senha legível;
+- ausência de cartão e senha nos logs;
+- rollback após falha forçada no audit log;
+- relatório financeiro em uma consulta;
+- exclusão em cascata sem órfãos;
+- JSON inválido e rota ausente com respostas 400/404 seguras;
+- foreign keys e unicidade de e-mail;
+- fronteiras entre routes, controllers, models e persistência.
+
+Todos os arquivos JavaScript passaram por `node --check`, e a busca estática retornou `PADROES_CRITICOS=0` para os segredos e estruturas legadas auditadas.
+
+### 12.4 Boot e validação HTTP real
+
+A aplicação foi iniciada pelo comando oficial `npm start`, na porta temporária 3100 e com SQLite em memória. Ao final, os processos Node/npm foram encerrados, a porta foi liberada e os logs temporários foram removidos.
+
+| Cenário | Status |
+|---|---:|
+| `GET /api/admin/financial-report` com token | 200 |
+| `POST /api/checkout` com pagamento recusado | 400 |
+| `POST /api/checkout` com pagamento aprovado | 200 |
+| `DELETE /api/users/1` com token | 200 |
+| `GET /api/admin/financial-report` sem token | 403 |
+
+Resultado: **3/3 endpoints originais e 5 cenários HTTP validados**, com `NPM_START=OK` e `LOGS_SENSIVEIS=0`.
+
+### 12.5 Checklist de validação
+
+#### Fase 1 — Análise
+
+- [x] Linguagem detectada corretamente.
+- [x] Framework detectado corretamente.
+- [x] Domínio da aplicação descrito corretamente.
+- [x] Número de arquivos analisados condizente com a linha de base.
+
+#### Fase 2 — Auditoria
+
+- [x] Relatório segue o template da Skill.
+- [x] Cada finding registra arquivo e linhas.
+- [x] Findings ordenados de CRÍTICO a BAIXO.
+- [x] Mais de cinco findings identificados.
+- [x] Dependências deprecated detectadas.
+- [x] Skill pausou e pediu confirmação antes da Fase 3.
+
+#### Fase 3 — Refatoração
+
+- [x] Estrutura de diretórios segue MVC adaptado ao Express.
+- [x] Configuração extraída sem segredos hardcoded.
+- [x] Models representam entidades do domínio.
+- [x] Views/Routes separadas com `express.Router`.
+- [x] Controllers concentram a coordenação sem SQL/Express.
+- [x] Tratamento de erros centralizado.
+- [x] Entry point claro em `src/server.js`.
+- [x] Aplicação inicia sem erros por `npm start`.
+- [x] Endpoints originais respondem.
+
+### 12.6 Dependências e riscos remanescentes
+
+- O `package-lock.json` permaneceu inalterado. A árvore deprecated precisa ser tratada em mudança isolada, avaliando atualização ou substituição de `sqlite3` e compatibilidade com a versão de Node escolhida.
+- `PaymentService` preserva a simulação legada baseada em prefixo para manter os cenários do desafio. Um sistema real deve injetar adapter de gateway autenticado e idempotente.
+- O token administrativo por header é uma barreira adequada ao desafio, mas uma aplicação real deve usar identidade verificável, expiração e autorização por política.
