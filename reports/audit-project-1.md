@@ -6,8 +6,8 @@
 |---|---|
 | Projeto analisado | `code-smells-project` |
 | Data da análise | 11/07/2026 |
-| Fases executadas | Fase 1 — Análise; Fase 2 — Relatório e plano |
-| Fase não executada | Fase 3 — Refatoração |
+| Fases executadas | Fase 1 — Análise; Fase 2 — Relatório e plano; Fase 3 — Refatoração e validação |
+| Status da Fase 3 | Concluída após autorização explícita do usuário |
 | Stack identificada | Python 3, Flask 3.1.1, Flask-CORS 5.0.1 e SQLite |
 | Arquivos-fonte analisados | `app.py`, `controllers.py`, `models.py`, `database.py` |
 | Volume analisado | 4 arquivos, 780 linhas de código-fonte |
@@ -20,7 +20,7 @@ O projeto implementa uma API de loja virtual com produtos, usuários, pedidos e 
 
 Foram identificados **14 achados**: **4 críticos**, **3 altos**, **5 médios** e **2 baixos**. Os maiores riscos são execução remota de SQL, injeção de SQL, armazenamento e exposição de credenciais e segredos, ausência de autenticação em operações administrativas e fragilidade transacional no fluxo de pedidos.
 
-Nenhuma alteração de código foi realizada. A refatoração somente poderá começar após autorização explícita para a Fase 3.
+Na conclusão das Fases 1 e 2, nenhuma alteração de código havia sido realizada. A Fase 3 começou somente após autorização explícita do usuário; seus resultados estão registrados na seção 12.
 
 ## 3. Inventário arquitetural
 
@@ -301,11 +301,144 @@ Não devem ser preservados como contrato: execução arbitrária de SQL, reset p
 
 ## 10. Limitações da análise
 
-- A análise foi estática e restrita aos arquivos do projeto `code-smells-project` e às referências da Skill.
+- As Fases 1 e 2 foram estáticas e restritas aos arquivos do projeto `code-smells-project` e às referências da Skill.
 - O banco existente não foi alterado nem usado para validar qualidade dos dados históricos.
-- Dependências não foram instaladas e nenhum teste dinâmico foi executado nesta etapa.
-- A ausência de suíte automatizada limita a segurança de uma refatoração futura; por isso os testes de caracterização são a primeira atividade proposta para a Fase 3.
+- Nenhuma dependência adicional foi instalada.
+- A Fase 3 criou uma suíte automatizada e executou validações dinâmicas em banco temporário; o banco local `loja.db` não foi usado nos testes.
 
-## 11. Confirmação obrigatória antes da Fase 3
+## 11. Confirmação obrigatória antes da Fase 3 — registro histórico
 
 **Fases 1 e 2 concluídas. Nenhum código da aplicação foi modificado. Deseja autorizar explicitamente a Fase 3 — Refatoração? Sem uma resposta afirmativa, nenhuma refatoração deve ser iniciada.**
+
+A autorização afirmativa foi recebida antes da primeira alteração da Fase 3. A pergunta acima foi preservada como evidência da barreira humana prevista na Skill.
+
+## 12. Resultado da Fase 3
+
+### 12.1 Resumo da transformação
+
+A aplicação foi reorganizada para uma arquitetura MVC adaptada a APIs Flask. O ponto de entrada passou a atuar como composition root, as rotas foram convertidas em Blueprints finos, controladores coordenam os casos de uso, serviços concentram regras multi-entidade, repositórios encapsulam SQL parametrizado e models expõem somente representações seguras.
+
+```text
+app.py                         # application factory e composição
+config.py                      # configuração por ambiente
+database.py                    # conexão por contexto, schema e seed
+errors.py                      # tradução central de erros
+controllers/                   # coordenação dos casos de uso
+models/                        # entidades e serialização segura
+repositories/                  # persistência e consultas SQL
+routes/                        # Views/Routes HTTP com Blueprints
+schemas/                       # validação central de entrada
+services/                      # autenticação, pedidos, relatórios e administração
+tests/                         # caracterização, segurança e arquitetura
+```
+
+Os antigos módulos concentradores `controllers.py` e `models.py` foram substituídos pelas respectivas estruturas em diretórios.
+
+### 12.2 Tratamento dos achados
+
+| Achado | Resultado da Fase 3 |
+|---|---|
+| AP-001 | Resolvido: `/admin/query` permanece identificável, mas rejeita qualquer SQL com `403`. |
+| AP-002 | Resolvido: valores externos usam placeholders; busca dinâmica concatena somente cláusulas internas fixas. |
+| AP-003 | Resolvido: novos usuários e seeds usam hash; serializers não expõem senha; login atualiza registros legados após autenticação válida. |
+| AP-004 | Resolvido: segredo, debug, host, porta e CORS vêm da configuração; health check não expõe segredo ou caminho do banco. |
+| AP-005 | Resolvido: reset exige `X-Admin-Token` configurado no ambiente e usa comparação segura. |
+| AP-006 | Resolvido: responsabilidades separadas em routes, controllers, models, services e repositories. |
+| AP-007 | Resolvido: conexão por contexto Flask, teardown e transação explícita com rollback na criação de pedidos. |
+| AP-008 | Resolvido: pedidos, itens e produtos são carregados por uma consulta com JOIN. |
+| AP-009 | Parcial: novos bancos possuem `NOT NULL`, `UNIQUE`, `CHECK`, foreign keys e índices; um `loja.db` legado exige migração explícita para receber constraints estruturais. |
+| AP-010 | Resolvido: schemas centralizam validação e handlers não devolvem mensagens do SQLite ou stack trace. |
+| AP-011 | Resolvido: routes e controllers não acessam SQLite diretamente. |
+| AP-012 | Resolvido: listagens têm paginação com limite máximo de 100 e seleção explícita de colunas. |
+| AP-013 | Resolvido: categorias e status foram centralizados; descontos ficaram em um único serviço. |
+| AP-014 | Resolvido: imports legados e `print` foram removidos; logging estruturado registra apenas identificadores operacionais. |
+
+### 12.3 Testes automatizados
+
+Comando executado:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Resultado: **9 testes aprovados**, cobrindo:
+
+- inventário e contratos dos 19 endpoints;
+- hash e ausência de senha nas respostas;
+- neutralização de entrada de SQL Injection;
+- rollback de cabeçalho, itens e estoque após falha intermediária;
+- listagem de pedidos em uma consulta;
+- foreign keys em bancos novos;
+- conflito de e-mail e erros públicos seguros;
+- bloqueio de SQL arbitrário e proteção do reset;
+- fronteiras entre routes, controllers, models e persistência.
+
+A compilação estática também foi validada:
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall -q app.py config.py database.py errors.py controllers models repositories routes schemas services tests
+```
+
+### 12.4 Boot e validação HTTP real
+
+A aplicação foi iniciada em `127.0.0.1:5089` com SQLite temporário, debug desativado e configuração de teste. O processo foi encerrado e os arquivos temporários removidos após a validação.
+
+| Endpoint | Status |
+|---|---:|
+| `GET /` | 200 |
+| `GET /produtos` | 200 |
+| `GET /produtos/busca` | 200 |
+| `GET /produtos/1` | 200 |
+| `POST /produtos` | 201 |
+| `PUT /produtos/1` | 200 |
+| `DELETE /produtos/<id>` | 200 |
+| `GET /usuarios` | 200 |
+| `GET /usuarios/1` | 200 |
+| `POST /usuarios` | 201 |
+| `POST /login` | 200 |
+| `POST /pedidos` | 201 |
+| `GET /pedidos` | 200 |
+| `GET /pedidos/usuario/1` | 200 |
+| `PUT /pedidos/<id>/status` | 200 |
+| `GET /relatorios/vendas` | 200 |
+| `GET /health` | 200 |
+| `POST /admin/query` | 403 — bloqueado por segurança |
+| `POST /admin/reset-db` sem token | 403 — bloqueado por segurança |
+
+Resultado: **19/19 endpoints originais responderam**, com mudanças de segurança justificadas para as duas operações administrativas.
+
+### 12.5 Checklist de validação
+
+#### Fase 1 — Análise
+
+- [x] Linguagem detectada corretamente.
+- [x] Framework detectado corretamente.
+- [x] Domínio da aplicação descrito corretamente.
+- [x] Número de arquivos analisados condizente com a linha de base.
+
+#### Fase 2 — Auditoria
+
+- [x] Relatório segue o template da Skill.
+- [x] Cada finding registra arquivo e linhas.
+- [x] Findings ordenados de CRÍTICO a BAIXO.
+- [x] Mais de cinco findings identificados.
+- [x] APIs deprecated verificadas e ausência registrada.
+- [x] Skill pausou e pediu confirmação antes da Fase 3.
+
+#### Fase 3 — Refatoração
+
+- [x] Estrutura de diretórios segue o padrão MVC adaptado à API.
+- [x] Configuração extraída para módulo próprio, sem segredo hardcoded.
+- [x] Models criados para representar e serializar dados com segurança.
+- [x] Views/Routes separadas em Blueprints.
+- [x] Controllers concentram o fluxo da aplicação.
+- [x] Tratamento de erros centralizado.
+- [x] Entry point claro com application factory.
+- [x] Aplicação inicia sem erros.
+- [x] Todos os endpoints originais respondem.
+
+### 12.6 Riscos remanescentes
+
+- Criar uma migração explícita para aplicar constraints aos bancos `loja.db` já existentes; `CREATE TABLE IF NOT EXISTS` protege bancos novos, mas não altera tabelas legadas.
+- Substituir o token administrativo simples por autenticação e autorização completas caso as rotas administrativas sejam mantidas em um ambiente real.
+- Ampliar testes concorrentes de estoque se a aplicação evoluir de SQLite para um banco multiusuário de produção.
