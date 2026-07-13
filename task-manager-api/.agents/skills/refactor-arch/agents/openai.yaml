@@ -1,0 +1,7 @@
+interface:
+  display_name: "Refatoração Arquitetural"
+  short_description: "Audita e refatora projetos legados para MVC"
+  default_prompt: "Use $refactor-arch para analisar e auditar este projeto; pare antes de refatorar até minha confirmação."
+
+policy:
+  allow_implicit_invocation: false
