@@ -6,8 +6,8 @@
 |---|---|
 | Projeto analisado | `task-manager-api` |
 | Data da análise | 12/07/2026 |
-| Fases executadas | Fase 1 — Análise; Fase 2 — Auditoria e plano |
-| Status da Fase 3 | Não iniciada; depende de autorização explícita do usuário |
+| Fases executadas | Fase 1 — Análise; Fase 2 — Auditoria e plano; Fase 3 — Refatoração e validação |
+| Status da Fase 3 | Concluída após autorização explícita do usuário |
 | Stack identificada | Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite |
 | Dependências declaradas | Flask, Flask-SQLAlchemy, Flask-CORS, Marshmallow, Requests e python-dotenv |
 | Arquivos-fonte analisados | `app.py`, `database.py`, `models/`, `routes/`, `services/`, `utils/` e `seed.py` |
@@ -24,7 +24,7 @@ O projeto implementa uma API de gerenciamento de tarefas, usuários, categorias 
 
 Os riscos mais graves são de segurança: o login entrega um token fictício que nenhuma rota valida, clientes podem escolher ou alterar o próprio papel, senhas usam MD5 e o hash é devolvido pela API. Também existem segredos e credenciais no fonte, debug habilitado, CORS irrestrito e operações de leitura e escrita sem autenticação ou autorização.
 
-Foram identificados **14 achados**: **3 críticos**, **2 altos**, **7 médios** e **2 baixos**. Nenhum arquivo-fonte do Projeto 3 foi modificado nas Fases 1 e 2.
+Foram identificados **14 achados**: **3 críticos**, **2 altos**, **7 médios** e **2 baixos**. Nenhum arquivo-fonte do Projeto 3 foi modificado nas Fases 1 e 2. A Fase 3 começou somente após autorização explícita e seus resultados estão registrados na seção 12.
 
 | Severidade | Quantidade |
 |---|---:|
@@ -380,15 +380,133 @@ Não devem ser preservados como contratos: MD5, hash na resposta, token fictíci
 
 ## 10. Limitações da auditoria
 
-- Esta etapa executou análise estática; o baseline HTTP de 22 endpoints já havia sido estabelecido anteriormente e deverá ser repetido na Fase 3.
-- O projeto não possui testes automatizados, portanto comportamentos implícitos precisam ser congelados antes da primeira refatoração.
+- As Fases 1 e 2 foram estáticas; a Fase 3 registrou baseline e validação posterior dos 22 endpoints por HTTP real.
+- O projeto não possuía testes automatizados; a Fase 3 criou uma suíte de caracterização, segurança e arquitetura antes das mudanças estruturais.
 - Não foram instaladas, removidas ou atualizadas dependências.
-- Não foram testadas credenciais SMTP nem realizadas conexões externas.
+- O serviço SMTP desconectado foi removido após busca de referências e testes verdes; nenhuma conexão externa foi realizada.
 - Nenhum segredo ou hash encontrado foi reproduzido no relatório.
-- A definição final de autorização por papel e propriedade exige decisão explícita de regra de negócio antes da implementação.
+- A matriz implementada considera `admin` e `manager` como equipe, reserva exclusão de usuários para `admin` e restringe usuários comuns à própria conta e às próprias tarefas.
 
 ## 11. Confirmação obrigatória antes da Fase 3
 
 **Fase 2 concluída. Foram encontrados 14 achados: 3 CRÍTICOS, 2 ALTOS, 7 MÉDIOS e 2 BAIXOS.**
 
 **Deseja autorizar a Fase 3 e permitir a modificação dos arquivos do Projeto 3 para executar a refatoração proposta? Responda explicitamente com “sim” ou “não”. Sem resposta afirmativa, nenhuma refatoração deve ser iniciada.**
+
+A autorização afirmativa foi recebida antes da primeira alteração da Fase 3. A pergunta acima foi preservada como evidência da barreira humana prevista na Skill.
+
+## 12. Resultado da Fase 3
+
+### 12.1 Resumo da transformação
+
+O Projeto 3 passou a usar uma application factory e um composition root explícito. Os Blueprints agora tratam somente HTTP, validação já carregada e chamada a um controller. Controllers coordenam services; services aplicam autenticação, autorização, propriedade e transações; repositories concentram SQLAlchemy, paginação e agregações; models mantêm entidades e serializers públicos seguros.
+
+```text
+HTTP request
+  -> middleware de autenticação
+    -> schema Marshmallow
+      -> route Blueprint
+        -> controller
+          -> service
+            -> repository
+              -> model / SQLite
+  -> error handler central
+```
+
+- `app.py` não cria schema durante import e não contém instância global da aplicação.
+- `config/` lê ambiente e exige `SECRET_KEY` forte.
+- `middlewares/` valida tokens assinados e temporários e centraliza erros.
+- `schemas/` mantém uma fonte única para validação.
+- `repositories/` usa a API moderna do SQLAlchemy e consultas agregadas.
+- `tests/` cobre contratos, segurança, arquitetura e HTTP real.
+- Nenhuma dependência foi adicionada ou atualizada.
+
+### 12.2 Tratamento dos achados
+
+| Achado | Resultado da Fase 3 |
+|---|---|
+| AP3-001 | Resolvido: token assinado e temporário, autenticação obrigatória e cadastro público limitado a `user`. |
+| AP3-002 | Resolvido: hash adaptativo do Werkzeug, senha mínima de 12 caracteres e serializers sem senha/hash. |
+| AP3-003 | Resolvido: configuração vem do ambiente; credenciais SMTP e debug hardcoded foram removidos; CORS é restrito por configuração. |
+| AP3-004 | Resolvido: autorização por papel e por proprietário aplicada a usuários, tarefas, categorias e relatórios. |
+| AP3-005 | Resolvido: routes, controllers, services, repositories, schemas e middlewares possuem fronteiras explícitas. |
+| AP3-006 | Resolvido: relacionamentos são carregados por JOIN e relatórios/listagens usam agregações; teste limita a listagem de tarefas a duas consultas incluindo autenticação. |
+| AP3-007 | Resolvido: listagens aceitam `page`/`per_page`, têm default 50 e máximo 100; detalhes de atraso do relatório também são limitados. |
+| AP3-008 | Resolvido: erros de aplicação e validação são tratados centralmente; escritas fazem rollback. |
+| AP3-009 | Resolvido: schemas Marshmallow substituíram validações duplicadas e os helpers mortos foram removidos. |
+| AP3-010 | Resolvido: tipos inválidos e JSON ausente retornam 400, cobertos por testes. |
+| AP3-011 | Resolvido: `Session.get()`/`select()` substituíram `Query.get()` e timestamps usam `datetime.now(UTC)`. |
+| AP3-012 | Resolvido no escopo do achado: importar `app.py` não cria banco ou schema; o seed é um comando explícito. |
+| AP3-013 | Resolvido: status, papéis, prioridades e limites estão centralizados em `models/constants.py`. |
+| AP3-014 | Resolvido: imports, helpers e serviço SMTP sem uso foram removidos; logging inesperado usa o logger do Flask. |
+
+### 12.3 Testes automatizados
+
+Comando principal:
+
+```powershell
+.\.venv\Scripts\python.exe -W "error::DeprecationWarning" -m unittest discover -s tests -v
+```
+
+Resultado: **16 testes executados, 16 aprovados**. Warnings de depreciação foram promovidos a erro para provar que os usos legados foram removidos.
+
+Cobertura funcional da suíte:
+
+- seis testes de contratos cobrindo os 22 endpoints;
+- token ausente, adulterado e expirado;
+- ausência de senha/hash nas respostas;
+- bloqueio de elevação de papel e acesso cruzado;
+- validação de tipos e senha mínima;
+- paginação e limite máximo;
+- integridade em exclusões;
+- contagem de consultas contra N+1;
+- fronteiras arquiteturais e import sem efeito colateral;
+- configuração obrigatória de segredo.
+
+Validações complementares:
+
+- `python -m compileall`: aprovado;
+- `python -m pip check`: nenhuma dependência quebrada;
+- seed em SQLite temporário: 3 usuários, 4 categorias e 10 tarefas;
+- busca estática: nenhum `Query.get()`, `datetime.utcnow()`, MD5, token falso, segredo legado, `debug=True` ou `except:`;
+- routes sem acesso direto a `db`/ORM;
+- controllers, services, repositories e models sem dependência de Flask;
+- nenhuma serialização de senha e nenhum whitespace residual.
+
+### 12.4 Boot e validação HTTP real
+
+O comando abaixo iniciou um servidor Werkzeug em porta efêmera, com SQLite temporário, e realizou requests reais pela rede:
+
+```powershell
+.\.venv\Scripts\python.exe -m tests.smoke_http
+```
+
+Resultado: **22/22 endpoints respondendo**, com os mesmos caminhos, métodos e códigos de sucesso observados no baseline. A diferença intencional é que operações protegidas agora exigem `Authorization: Bearer <token>`.
+
+### 12.5 Checklist de validação
+
+- [x] Baseline registrado no commit `4bc2107` antes das mudanças.
+- [x] Testes de caracterização criados antes da separação de camadas.
+- [x] Application factory sem criação de schema no import.
+- [x] Routes sem acesso direto ao ORM.
+- [x] Controllers, services, repositories e schemas separados.
+- [x] Configuração sensível lida do ambiente.
+- [x] Token assinado, temporário e rejeitado quando alterado/expirado.
+- [x] Senha com hash adaptativo e nunca serializada.
+- [x] Autenticação, papéis e propriedade cobertos por testes.
+- [x] Erros e rollback centralizados.
+- [x] Paginação e limite máximo aplicados.
+- [x] N+1 removido dos fluxos auditados.
+- [x] APIs depreciadas removidas.
+- [x] Seed explícito e sem exposição de credenciais.
+- [x] 16/16 testes automatizados aprovados.
+- [x] 22/22 endpoints aprovados por HTTP real.
+- [ ] Adotar ferramenta formal de migrations antes de evolução de schema em produção.
+
+### 12.6 Riscos e decisões remanescentes
+
+- O exercício continua usando SQLite e criação explícita via `seed.py`; uma aplicação real deve adotar migrations versionadas antes de alterar o schema.
+- Bancos locais criados pelo legado contêm hashes MD5 incompatíveis com o novo verificador. No exercício, execute novamente o seed; com dados reais seria necessária uma migração/reset de senha controlado.
+- Tokens assinados expiram e verificam o estado atual do usuário, mas não há lista de revogação antecipada nem rate limiting de login.
+- A política de autorização implementada deve ser validada com o responsável de negócio antes de uso produtivo.
+- Atualizações de dependências foram deliberadamente excluídas desta refatoração estrutural.
