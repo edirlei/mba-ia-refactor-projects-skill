@@ -1,12 +1,10 @@
 # Criação de Skills — Refatoração Arquitetural Automatizada
 
-Ao longo do curso você aprendeu o que são Skills e como elas permitem que um agente de IA atue como um especialista em tarefas específicas. Agora imagine o seguinte cenário: você herdou 3 projetos legados com problemas de arquitetura, segurança e qualidade de código. Revisar e corrigir tudo manualmente levaria dias.
-
-Neste desafio, você vai criar uma Skill que automatiza esse processo — analisando, auditando e refatorando qualquer projeto para o padrão MVC, independente da tecnologia.
+Este repositório apresenta a entrega do desafio de criação de uma Skill agnóstica de tecnologia para analisar, auditar e refatorar projetos legados para uma arquitetura MVC. A solução foi implementada e validada com OpenAI Codex em duas APIs Flask e uma API Express.
 
 ## Objetivo
 
-Você deve entregar uma Skill capaz de:
+A entrega contém uma Skill capaz de:
 
 - Analisar uma codebase detectando linguagem, framework e arquitetura atual
 - Identificar anti-patterns e code smells, classificando por severidade com arquivo e linha exatos
@@ -18,7 +16,9 @@ A skill deve ser agnóstica de tecnologia, funcionando com diferentes linguagens
 
 ## Análise Manual
 
-Esta seção registra a análise estática manual dos três projetos fornecidos. Cada achado foi classificado conforme a escala de severidade do desafio e contém uma localização verificável no código. Nesta etapa, as aplicações ainda não foram executadas; os resultados abaixo formam a linha de base que será usada para avaliar a capacidade de detecção da Skill.
+Esta seção registra a análise estática manual dos três projetos fornecidos. Cada achado foi classificado conforme a escala de severidade do desafio e contém uma localização verificável no código. Nesta etapa, as aplicações ainda não haviam sido executadas; os resultados abaixo formaram a linha de base usada para avaliar a capacidade de detecção da Skill.
+
+As localizações desta análise se referem ao código anterior às refatorações. Os snapshots correspondentes são [`d53b889` — Projeto 1](https://github.com/edirlei/mba-ia-refactor-projects-skill/tree/d53b889/code-smells-project), [`5ef0205` — Projeto 2](https://github.com/edirlei/mba-ia-refactor-projects-skill/tree/5ef0205/ecommerce-api-legacy) e [`4bc2107` — Projeto 3](https://github.com/edirlei/mba-ia-refactor-projects-skill/tree/4bc2107/task-manager-api).
 
 ### Resumo dos achados
 
@@ -37,18 +37,18 @@ Stack identificada: Python, Flask 3.1.1, Flask-CORS e SQLite. O projeto é uma A
 
 | Severidade | Problema e localização | Por que é relevante |
 |---|---|---|
-| **CRÍTICO** | Execução arbitrária de SQL em [`app.py:59-76`](code-smells-project/app.py#L59-L76) | O endpoint `/admin/query` executa diretamente uma string SQL recebida na requisição, sem autenticação. Um cliente pode ler, alterar ou excluir qualquer dado e até remover a estrutura do banco. |
-| **CRÍTICO** | SQL Injection generalizada em [`models.py:47-60`](code-smells-project/models.py#L47-L60), [`models.py:105-129`](code-smells-project/models.py#L105-L129) e [`models.py:285-299`](code-smells-project/models.py#L285-L299) | Dados de produtos, credenciais e filtros são concatenados em SQL. Isso permite modificar a consulta, burlar autenticação e acessar ou corromper dados. |
-| **CRÍTICO** | Senhas armazenadas e devolvidas em texto puro em [`database.py:27-33`](code-smells-project/database.py#L27-L33), [`database.py:75-82`](code-smells-project/database.py#L75-L82) e [`models.py:72-129`](code-smells-project/models.py#L72-L129) | As senhas são gravadas sem hash e aparecem nas respostas de listagem e consulta de usuários. Um acesso à API ou ao banco expõe credenciais diretamente reutilizáveis. |
-| **CRÍTICO** | Chave secreta e debug expostos em [`app.py:7-9`](code-smells-project/app.py#L7-L9), [`app.py:88`](code-smells-project/app.py#L88) e [`controllers.py:285-290`](code-smells-project/controllers.py#L285-L290) | A chave é literal, o debug permanece habilitado e o endpoint `/health` devolve a própria chave. Isso expõe configuração sensível e amplia a superfície de ataque. |
-| **ALTO** | Reset completo do banco sem autenticação em [`app.py:47-57`](code-smells-project/app.py#L47-L57) | Qualquer cliente pode chamar `/admin/reset-db` e apagar pedidos, itens, produtos e usuários. |
-| **ALTO** | God Modules e violação de MVC/SRP em [`models.py:4-314`](code-smells-project/models.py#L4-L314), [`controllers.py:5-292`](code-smells-project/controllers.py#L5-L292) e [`app.py:47-78`](code-smells-project/app.py#L47-L78) | Os módulos misturam múltiplos domínios, SQL, regras, serialização, validação, notificações e administração. Isso gera forte acoplamento e dificulta testes isolados. |
-| **ALTO** | Gerenciamento inseguro de conexão e transações em [`database.py:4-10`](code-smells-project/database.py#L4-L10) e [`models.py:133-169`](code-smells-project/models.py#L133-L169) | Uma única conexão global é compartilhada com a proteção de thread desabilitada. A criação de pedidos executa várias escritas sem rollback explícito, permitindo estado parcial após falhas. |
-| **MÉDIO** | Consultas N+1 em [`models.py:171-233`](code-smells-project/models.py#L171-L233) | Para cada pedido são consultados os itens e, para cada item, o produto. A quantidade de consultas cresce rapidamente com o volume de dados. |
-| **MÉDIO** | Banco sem restrições de integridade em [`database.py:14-53`](code-smells-project/database.py#L14-L53) | Faltam chaves estrangeiras, unicidade de e-mail e restrições de nulidade, permitindo registros órfãos e estados inválidos. |
-| **MÉDIO** | Validação e tratamento de erros inconsistentes em [`controllers.py:5-22`](code-smells-project/controllers.py#L5-L22), [`controllers.py:167-220`](code-smells-project/controllers.py#L167-L220) e [`controllers.py:237-292`](code-smells-project/controllers.py#L237-L292) | Exceções genéricas são devolvidas com detalhes internos e alguns handlers acessam JSON sem validar sua existência ou os tipos recebidos. |
-| **BAIXO** | Valores mágicos e regras espalhadas em [`controllers.py:52-54`](code-smells-project/controllers.py#L52-L54), [`controllers.py:242`](code-smells-project/controllers.py#L242) e [`models.py:256-262`](code-smells-project/models.py#L256-L262) | Categorias, status e faixas de desconto estão codificados em vários pontos, elevando o risco de alterações inconsistentes. |
-| **BAIXO** | Higiene e nomenclatura em [`database.py:2`](code-smells-project/database.py#L2), [`models.py:2`](code-smells-project/models.py#L2) e [`controllers.py:14`](code-smells-project/controllers.py#L14) | Há imports não utilizados, parâmetros chamados `id` que ocultam o built-in do Python e logging feito com `print`, reduzindo legibilidade e observabilidade. |
+| **CRÍTICO** | Execução arbitrária de SQL em [`app.py:59-76`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/app.py#L59-L76) | O endpoint `/admin/query` executa diretamente uma string SQL recebida na requisição, sem autenticação. Um cliente pode ler, alterar ou excluir qualquer dado e até remover a estrutura do banco. |
+| **CRÍTICO** | SQL Injection generalizada em [`models.py:47-60`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L47-L60), [`models.py:105-129`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L105-L129) e [`models.py:285-299`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L285-L299) | Dados de produtos, credenciais e filtros são concatenados em SQL. Isso permite modificar a consulta, burlar autenticação e acessar ou corromper dados. |
+| **CRÍTICO** | Senhas armazenadas e devolvidas em texto puro em [`database.py:27-33`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/database.py#L27-L33), [`database.py:75-82`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/database.py#L75-L82) e [`models.py:72-129`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L72-L129) | As senhas são gravadas sem hash e aparecem nas respostas de listagem e consulta de usuários. Um acesso à API ou ao banco expõe credenciais diretamente reutilizáveis. |
+| **CRÍTICO** | Chave secreta e debug expostos em [`app.py:7-9`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/app.py#L7-L9), [`app.py:88`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/app.py#L88) e [`controllers.py:285-290`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L285-L290) | A chave é literal, o debug permanece habilitado e o endpoint `/health` devolve a própria chave. Isso expõe configuração sensível e amplia a superfície de ataque. |
+| **ALTO** | Reset completo do banco sem autenticação em [`app.py:47-57`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/app.py#L47-L57) | Qualquer cliente pode chamar `/admin/reset-db` e apagar pedidos, itens, produtos e usuários. |
+| **ALTO** | God Modules e violação de MVC/SRP em [`models.py:4-314`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L4-L314), [`controllers.py:5-292`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L5-L292) e [`app.py:47-78`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/app.py#L47-L78) | Os módulos misturam múltiplos domínios, SQL, regras, serialização, validação, notificações e administração. Isso gera forte acoplamento e dificulta testes isolados. |
+| **ALTO** | Gerenciamento inseguro de conexão e transações em [`database.py:4-10`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/database.py#L4-L10) e [`models.py:133-169`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L133-L169) | Uma única conexão global é compartilhada com a proteção de thread desabilitada. A criação de pedidos executa várias escritas sem rollback explícito, permitindo estado parcial após falhas. |
+| **MÉDIO** | Consultas N+1 em [`models.py:171-233`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L171-L233) | Para cada pedido são consultados os itens e, para cada item, o produto. A quantidade de consultas cresce rapidamente com o volume de dados. |
+| **MÉDIO** | Banco sem restrições de integridade em [`database.py:14-53`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/database.py#L14-L53) | Faltam chaves estrangeiras, unicidade de e-mail e restrições de nulidade, permitindo registros órfãos e estados inválidos. |
+| **MÉDIO** | Validação e tratamento de erros inconsistentes em [`controllers.py:5-22`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L5-L22), [`controllers.py:167-220`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L167-L220) e [`controllers.py:237-292`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L237-L292) | Exceções genéricas são devolvidas com detalhes internos e alguns handlers acessam JSON sem validar sua existência ou os tipos recebidos. |
+| **BAIXO** | Valores mágicos e regras espalhadas em [`controllers.py:52-54`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L52-L54), [`controllers.py:242`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L242) e [`models.py:256-262`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L256-L262) | Categorias, status e faixas de desconto estão codificados em vários pontos, elevando o risco de alterações inconsistentes. |
+| **BAIXO** | Higiene e nomenclatura em [`database.py:2`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/database.py#L2), [`models.py:2`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/models.py#L2) e [`controllers.py:14`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/d53b889/code-smells-project/controllers.py#L14) | Há imports não utilizados, parâmetros chamados `id` que ocultam o built-in do Python e logging feito com `print`, reduzindo legibilidade e observabilidade. |
 
 Não foi identificada uma API claramente obsoleta no código-fonte deste projeto. A ausência desse achado é intencional: a auditoria não deve fabricar problemas apenas para atingir uma quantidade mínima.
 
@@ -58,20 +58,20 @@ Stack identificada: JavaScript, Node.js, Express 4.18.2 e SQLite em memória. Ap
 
 | Severidade | Problema e localização | Por que é relevante |
 |---|---|---|
-| **CRÍTICO** | Credenciais e chaves hardcoded em [`utils.js:1-6`](ecommerce-api-legacy/src/utils.js#L1-L6) | Usuário e senha de banco, chave de gateway e usuário SMTP estão no código. Isso expõe segredos e impede a separação segura entre ambientes. |
-| **CRÍTICO** | Cartão completo e chave do gateway registrados em log em [`AppManager.js:43-46`](ecommerce-api-legacy/src/AppManager.js#L43-L46) | Dados financeiros e credenciais podem ser armazenados em logs, observabilidade e backups, ampliando o impacto de qualquer vazamento. |
-| **CRÍTICO** | Função de senha insegura e senha padrão em [`utils.js:17-22`](ecommerce-api-legacy/src/utils.js#L17-L22) e [`AppManager.js:66-69`](ecommerce-api-legacy/src/AppManager.js#L66-L69) | A função repete Base64, trunca o resultado e usa `123456` quando a senha não é informada. Base64 não é um hash adequado para senhas. |
-| **ALTO** | God Class em [`AppManager.js:4-138`](ecommerce-api-legacy/src/AppManager.js#L4-L138) | A classe cria e popula o banco, registra rotas, processa checkout, pagamento, usuários, auditoria e relatórios. A concentração viola MVC/SRP e impede testes isolados. |
-| **ALTO** | Rotas administrativas sem autenticação em [`AppManager.js:80-137`](ecommerce-api-legacy/src/AppManager.js#L80-L137) | Qualquer cliente pode consultar dados financeiros e excluir usuários, expondo informações e permitindo operações destrutivas. |
-| **ALTO** | Checkout sem transação atômica em [`AppManager.js:50-61`](ecommerce-api-legacy/src/AppManager.js#L50-L61) | Matrícula, pagamento e auditoria são gravados sequencialmente sem rollback. Uma falha intermediária deixa o banco inconsistente. |
-| **ALTO** | Estado global mutável em [`utils.js:9-15`](ecommerce-api-legacy/src/utils.js#L9-L15) | Cache e receita global são compartilhados entre requisições, dificultando isolamento, testes e controle de memória. |
-| **MÉDIO** | Consultas N+1 no relatório em [`AppManager.js:83-127`](ecommerce-api-legacy/src/AppManager.js#L83-L127) | Cada curso consulta matrículas e cada matrícula consulta usuário e pagamento, fazendo o custo crescer com a base. |
-| **MÉDIO** | Erros de callbacks ignorados em [`AppManager.js:57-61`](ecommerce-api-legacy/src/AppManager.js#L57-L61), [`AppManager.js:92-126`](ecommerce-api-legacy/src/AppManager.js#L92-L126) e [`AppManager.js:131-136`](ecommerce-api-legacy/src/AppManager.js#L131-L136) | Diversos callbacks recebem `err`, mas continuam a execução. Isso pode causar exceções, respostas penduradas e respostas de sucesso após falhas. |
-| **MÉDIO** | Banco sem integridade referencial em [`AppManager.js:12-16`](ecommerce-api-legacy/src/AppManager.js#L12-L16) e [`AppManager.js:131-136`](ecommerce-api-legacy/src/AppManager.js#L131-L136) | Não existem foreign keys ou unicidade de e-mail, e a exclusão de usuário deixa matrículas e pagamentos órfãos. |
-| **MÉDIO** | Dependências transitivas obsoletas em [`package-lock.json:33-38`](ecommerce-api-legacy/package-lock.json#L33-L38), [`package-lock.json:827-832`](ecommerce-api-legacy/package-lock.json#L827-L832), [`package-lock.json:1074-1079`](ecommerce-api-legacy/package-lock.json#L1074-L1079) e [`package-lock.json:2113-2118`](ecommerce-api-legacy/package-lock.json#L2113-L2118) | O lockfile registra nove pacotes transitivos como deprecated, incluindo `glob`, `inflight`, `rimraf` e `tar`. A cadeia precisa ser revisada sem atualizações cegas. |
-| **MÉDIO** | Validação e pagamento superficiais em [`AppManager.js:28-48`](ecommerce-api-legacy/src/AppManager.js#L28-L48) | Senha, e-mail, IDs e cartão não são devidamente validados. O pagamento é decidido apenas pelo primeiro dígito do cartão e está acoplado à rota. |
-| **BAIXO** | Nomes abreviados em [`AppManager.js:28-35`](ecommerce-api-legacy/src/AppManager.js#L28-L35) | Variáveis como `u`, `e`, `p`, `cid` e `cc` escondem a intenção e tornam o fluxo mais difícil de revisar. |
-| **BAIXO** | Código morto e valores mágicos em [`AppManager.js:2`](ecommerce-api-legacy/src/AppManager.js#L2) e [`utils.js:6-22`](ecommerce-api-legacy/src/utils.js#L6-L22) | `totalRevenue` não é utilizado e valores como `10000`, `10`, `3000` e o prefixo `4` aparecem sem abstração ou explicação. |
+| **CRÍTICO** | Credenciais e chaves hardcoded em [`utils.js:1-6`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/utils.js#L1-L6) | Usuário e senha de banco, chave de gateway e usuário SMTP estão no código. Isso expõe segredos e impede a separação segura entre ambientes. |
+| **CRÍTICO** | Cartão completo e chave do gateway registrados em log em [`AppManager.js:43-46`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L43-L46) | Dados financeiros e credenciais podem ser armazenados em logs, observabilidade e backups, ampliando o impacto de qualquer vazamento. |
+| **CRÍTICO** | Função de senha insegura e senha padrão em [`utils.js:17-22`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/utils.js#L17-L22) e [`AppManager.js:66-69`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L66-L69) | A função repete Base64, trunca o resultado e usa `123456` quando a senha não é informada. Base64 não é um hash adequado para senhas. |
+| **ALTO** | God Class em [`AppManager.js:4-138`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L4-L138) | A classe cria e popula o banco, registra rotas, processa checkout, pagamento, usuários, auditoria e relatórios. A concentração viola MVC/SRP e impede testes isolados. |
+| **ALTO** | Rotas administrativas sem autenticação em [`AppManager.js:80-137`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L80-L137) | Qualquer cliente pode consultar dados financeiros e excluir usuários, expondo informações e permitindo operações destrutivas. |
+| **ALTO** | Checkout sem transação atômica em [`AppManager.js:50-61`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L50-L61) | Matrícula, pagamento e auditoria são gravados sequencialmente sem rollback. Uma falha intermediária deixa o banco inconsistente. |
+| **ALTO** | Estado global mutável em [`utils.js:9-15`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/utils.js#L9-L15) | Cache e receita global são compartilhados entre requisições, dificultando isolamento, testes e controle de memória. |
+| **MÉDIO** | Consultas N+1 no relatório em [`AppManager.js:83-127`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L83-L127) | Cada curso consulta matrículas e cada matrícula consulta usuário e pagamento, fazendo o custo crescer com a base. |
+| **MÉDIO** | Erros de callbacks ignorados em [`AppManager.js:57-61`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L57-L61), [`AppManager.js:92-126`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L92-L126) e [`AppManager.js:131-136`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L131-L136) | Diversos callbacks recebem `err`, mas continuam a execução. Isso pode causar exceções, respostas penduradas e respostas de sucesso após falhas. |
+| **MÉDIO** | Banco sem integridade referencial em [`AppManager.js:12-16`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L12-L16) e [`AppManager.js:131-136`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L131-L136) | Não existem foreign keys ou unicidade de e-mail, e a exclusão de usuário deixa matrículas e pagamentos órfãos. |
+| **MÉDIO** | Dependências transitivas obsoletas em [`package-lock.json:33-38`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/package-lock.json#L33-L38), [`package-lock.json:827-832`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/package-lock.json#L827-L832), [`package-lock.json:1074-1079`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/package-lock.json#L1074-L1079) e [`package-lock.json:2113-2118`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/package-lock.json#L2113-L2118) | O lockfile registra nove pacotes transitivos como deprecated, incluindo `glob`, `inflight`, `rimraf` e `tar`. A cadeia precisa ser revisada sem atualizações cegas. |
+| **MÉDIO** | Validação e pagamento superficiais em [`AppManager.js:28-48`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L28-L48) | Senha, e-mail, IDs e cartão não são devidamente validados. O pagamento é decidido apenas pelo primeiro dígito do cartão e está acoplado à rota. |
+| **BAIXO** | Nomes abreviados em [`AppManager.js:28-35`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L28-L35) | Variáveis como `u`, `e`, `p`, `cid` e `cc` escondem a intenção e tornam o fluxo mais difícil de revisar. |
+| **BAIXO** | Código morto e valores mágicos em [`AppManager.js:2`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/AppManager.js#L2) e [`utils.js:6-22`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/5ef0205/ecommerce-api-legacy/src/utils.js#L6-L22) | `totalRevenue` não é utilizado e valores como `10000`, `10`, `3000` e o prefixo `4` aparecem sem abstração ou explicação. |
 
 As consultas que recebem dados externos utilizam placeholders `?`; portanto, não foi registrado um achado de SQL Injection neste projeto.
 
@@ -81,22 +81,290 @@ Stack identificada: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. O proj
 
 | Severidade | Problema e localização | Por que é relevante |
 |---|---|---|
-| **CRÍTICO** | Autenticação fictícia e elevação de privilégio em [`user_routes.py:42-86`](task-manager-api/routes/user_routes.py#L42-L86) e [`user_routes.py:185-210`](task-manager-api/routes/user_routes.py#L185-L210) | O cliente pode se cadastrar como `admin`, e o login retorna um token previsível que não é assinado nem validado pelas rotas. |
-| **CRÍTICO** | MD5 para senhas e hash exposto nas respostas em [`user.py:16-32`](task-manager-api/models/user.py#L16-L32), [`user_routes.py:27-40`](task-manager-api/routes/user_routes.py#L27-L40) e [`user_routes.py:207-210`](task-manager-api/routes/user_routes.py#L207-L210) | MD5 sem salt é inadequado para senhas, e `to_dict()` inclui o hash em respostas de consulta, criação, atualização e login. |
-| **CRÍTICO** | Segredos e credenciais hardcoded em [`app.py:11-15`](task-manager-api/app.py#L11-L15), [`app.py:33-34`](task-manager-api/app.py#L33-L34) e [`notification_service.py:7-10`](task-manager-api/services/notification_service.py#L7-L10) | A chave Flask e as credenciais SMTP estão no fonte, enquanto o servidor inicia com debug habilitado. |
-| **ALTO** | Ausência de autorização e isolamento entre usuários em [`user_routes.py:92-151`](task-manager-api/routes/user_routes.py#L92-L151), [`task_routes.py:156-238`](task-manager-api/routes/task_routes.py#L156-L238) e [`report_routes.py:12-155`](task-manager-api/routes/report_routes.py#L12-L155) | Qualquer cliente pode alterar usuários e roles, editar ou excluir tarefas e consultar relatórios de terceiros. |
-| **ALTO** | Rotas atuando como God Controllers em [`task_routes.py:1-299`](task-manager-api/routes/task_routes.py#L1-L299), [`report_routes.py:1-223`](task-manager-api/routes/report_routes.py#L1-L223) e [`user_routes.py:1-211`](task-manager-api/routes/user_routes.py#L1-L211) | As rotas acumulam HTTP, validação, regras, acesso ao ORM, transações, cálculos e serialização. A estrutura em pastas não completa a separação MVC. |
-| **MÉDIO** | Consultas N+1 em [`task_routes.py:14-57`](task-manager-api/routes/task_routes.py#L14-L57), [`report_routes.py:53-68`](task-manager-api/routes/report_routes.py#L53-L68) e [`report_routes.py:157-165`](task-manager-api/routes/report_routes.py#L157-L165) | Cada tarefa busca usuário e categoria, cada usuário busca suas tarefas e cada categoria executa uma contagem separada. |
-| **MÉDIO** | Listagens sem paginação em [`task_routes.py:11-14`](task-manager-api/routes/task_routes.py#L11-L14), [`user_routes.py:10-12`](task-manager-api/routes/user_routes.py#L10-L12) e [`report_routes.py:30`](task-manager-api/routes/report_routes.py#L30) | As consultas carregam todos os registros na memória, degradando latência e consumo conforme a base cresce. |
-| **MÉDIO** | Exceções genéricas e silenciosas em [`task_routes.py:61-63`](task-manager-api/routes/task_routes.py#L61-L63), [`task_routes.py:225-238`](task-manager-api/routes/task_routes.py#L225-L238) e [`helpers.py:43-50`](task-manager-api/utils/helpers.py#L43-L50) | Blocos `except:` escondem tanto erros esperados quanto falhas de programação, prejudicando diagnóstico e observabilidade. |
-| **MÉDIO** | Validação duplicada e helpers não utilizados em [`helpers.py:57-116`](task-manager-api/utils/helpers.py#L57-L116), [`task_routes.py:85-223`](task-manager-api/routes/task_routes.py#L85-L223) e [`user_routes.py:42-78`](task-manager-api/routes/user_routes.py#L42-L78) | Helpers e constantes já existem, mas as rotas reimplementam as mesmas regras. O Marshmallow está declarado, porém não é utilizado. |
-| **MÉDIO** | Parâmetros inválidos podem gerar erro 500 em [`task_routes.py:240-271`](task-manager-api/routes/task_routes.py#L240-L271) e [`report_routes.py:190-209`](task-manager-api/routes/report_routes.py#L190-L209) | Conversões para inteiro e acesso a JSON ocorrem sem tratamento, transformando erros do cliente em falhas internas. |
-| **MÉDIO** | APIs legadas/depreciadas em [`task_routes.py:67`](task-manager-api/routes/task_routes.py#L67), [`user_routes.py:29`](task-manager-api/routes/user_routes.py#L29), [`task.py:15-16`](task-manager-api/models/task.py#L15-L16) e [`report_routes.py:35-45`](task-manager-api/routes/report_routes.py#L35-L45) | `Query.get()` é legado no SQLAlchemy 2.x, e `datetime.utcnow()` está depreciado desde Python 3.12. O uso dificulta evolução para APIs atuais e datas conscientes de timezone. |
-| **MÉDIO** | Criação do banco como efeito colateral de importação em [`app.py:30-31`](task-manager-api/app.py#L30-L31) | `db.create_all()` roda sempre que `app.py` é importado, dificultando testes, configuração de bancos alternativos e adoção de migrations. |
-| **BAIXO** | Valores e regras mágicas duplicadas em [`task.py:38-48`](task-manager-api/models/task.py#L38-L48), [`task_routes.py:102-114`](task-manager-api/routes/task_routes.py#L102-L114), [`user_routes.py:64-72`](task-manager-api/routes/user_routes.py#L64-L72) e [`helpers.py:110-116`](task-manager-api/utils/helpers.py#L110-L116) | Status, roles, limites de senha, prioridades e cores aparecem tanto em constantes quanto em literais, permitindo divergências. |
-| **BAIXO** | Imports, métodos e serviços não utilizados em [`app.py:7`](task-manager-api/app.py#L7), [`task_routes.py:7`](task-manager-api/routes/task_routes.py#L7), [`helpers.py:1-7`](task-manager-api/utils/helpers.py#L1-L7) e [`notification_service.py:1-48`](task-manager-api/services/notification_service.py#L1-L48) | Há imports e helpers não consumidos; o serviço de notificação não está integrado às rotas, gerando ruído e falsa expectativa de funcionalidade. |
+| **CRÍTICO** | Autenticação fictícia e elevação de privilégio em [`user_routes.py:42-86`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L42-L86) e [`user_routes.py:185-210`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L185-L210) | O cliente pode se cadastrar como `admin`, e o login retorna um token previsível que não é assinado nem validado pelas rotas. |
+| **CRÍTICO** | MD5 para senhas e hash exposto nas respostas em [`user.py:16-32`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/models/user.py#L16-L32), [`user_routes.py:27-40`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L27-L40) e [`user_routes.py:207-210`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L207-L210) | MD5 sem salt é inadequado para senhas, e `to_dict()` inclui o hash em respostas de consulta, criação, atualização e login. |
+| **CRÍTICO** | Segredos e credenciais hardcoded em [`app.py:11-15`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/app.py#L11-L15), [`app.py:33-34`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/app.py#L33-L34) e [`notification_service.py:7-10`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/services/notification_service.py#L7-L10) | A chave Flask e as credenciais SMTP estão no fonte, enquanto o servidor inicia com debug habilitado. |
+| **ALTO** | Ausência de autorização e isolamento entre usuários em [`user_routes.py:92-151`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L92-L151), [`task_routes.py:156-238`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L156-L238) e [`report_routes.py:12-155`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L12-L155) | Qualquer cliente pode alterar usuários e roles, editar ou excluir tarefas e consultar relatórios de terceiros. |
+| **ALTO** | Rotas atuando como God Controllers em [`task_routes.py:1-299`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L1-L299), [`report_routes.py:1-223`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L1-L223) e [`user_routes.py:1-211`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L1-L211) | As rotas acumulam HTTP, validação, regras, acesso ao ORM, transações, cálculos e serialização. A estrutura em pastas não completa a separação MVC. |
+| **MÉDIO** | Consultas N+1 em [`task_routes.py:14-57`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L14-L57), [`report_routes.py:53-68`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L53-L68) e [`report_routes.py:157-165`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L157-L165) | Cada tarefa busca usuário e categoria, cada usuário busca suas tarefas e cada categoria executa uma contagem separada. |
+| **MÉDIO** | Listagens sem paginação em [`task_routes.py:11-14`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L11-L14), [`user_routes.py:10-12`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L10-L12) e [`report_routes.py:30`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L30) | As consultas carregam todos os registros na memória, degradando latência e consumo conforme a base cresce. |
+| **MÉDIO** | Exceções genéricas e silenciosas em [`task_routes.py:61-63`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L61-L63), [`task_routes.py:225-238`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L225-L238) e [`helpers.py:43-50`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/utils/helpers.py#L43-L50) | Blocos `except:` escondem tanto erros esperados quanto falhas de programação, prejudicando diagnóstico e observabilidade. |
+| **MÉDIO** | Validação duplicada e helpers não utilizados em [`helpers.py:57-116`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/utils/helpers.py#L57-L116), [`task_routes.py:85-223`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L85-L223) e [`user_routes.py:42-78`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L42-L78) | Helpers e constantes já existem, mas as rotas reimplementam as mesmas regras. O Marshmallow está declarado, porém não é utilizado. |
+| **MÉDIO** | Parâmetros inválidos podem gerar erro 500 em [`task_routes.py:240-271`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L240-L271) e [`report_routes.py:190-209`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L190-L209) | Conversões para inteiro e acesso a JSON ocorrem sem tratamento, transformando erros do cliente em falhas internas. |
+| **MÉDIO** | APIs legadas/depreciadas em [`task_routes.py:67`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L67), [`user_routes.py:29`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L29), [`task.py:15-16`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/models/task.py#L15-L16) e [`report_routes.py:35-45`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/report_routes.py#L35-L45) | `Query.get()` é legado no SQLAlchemy 2.x, e `datetime.utcnow()` está depreciado desde Python 3.12. O uso dificulta evolução para APIs atuais e datas conscientes de timezone. |
+| **MÉDIO** | Criação do banco como efeito colateral de importação em [`app.py:30-31`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/app.py#L30-L31) | `db.create_all()` roda sempre que `app.py` é importado, dificultando testes, configuração de bancos alternativos e adoção de migrations. |
+| **BAIXO** | Valores e regras mágicas duplicadas em [`task.py:38-48`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/models/task.py#L38-L48), [`task_routes.py:102-114`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L102-L114), [`user_routes.py:64-72`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/user_routes.py#L64-L72) e [`helpers.py:110-116`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/utils/helpers.py#L110-L116) | Status, roles, limites de senha, prioridades e cores aparecem tanto em constantes quanto em literais, permitindo divergências. |
+| **BAIXO** | Imports, métodos e serviços não utilizados em [`app.py:7`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/app.py#L7), [`task_routes.py:7`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/routes/task_routes.py#L7), [`helpers.py:1-7`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/utils/helpers.py#L1-L7) e [`notification_service.py:1-48`](https://github.com/edirlei/mba-ia-refactor-projects-skill/blob/4bc2107/task-manager-api/services/notification_service.py#L1-L48) | Há imports e helpers não consumidos; o serviço de notificação não está integrado às rotas, gerando ruído e falsa expectativa de funcionalidade. |
 
 Não foi identificada SQL Injection evidente neste projeto, pois o acesso ao banco é realizado pelo ORM. Como pontos positivos, o projeto já utiliza Blueprints, models separados, foreign keys em `Task`, e-mail único e rollback em vários handlers de escrita. A refatoração deverá preservar esses avanços e melhorar a separação existente, não reconstruir o sistema sem necessidade.
+
+## Construção da Skill
+
+### Ferramenta escolhida e adaptação para o Codex
+
+A ferramenta escolhida foi o **OpenAI Codex**. Os exemplos do enunciado voltados ao Claude Code foram adaptados conforme a documentação oficial [Build skills](https://learn.chatgpt.com/docs/build-skills) da OpenAI:
+
+| Conceito | Exemplo do Claude Code | Implementação no OpenAI Codex |
+|---|---|---|
+| Diretório de Skills do repositório | `.claude/skills/` | `.agents/skills/` |
+| Instrução principal | `SKILL.md` | `SKILL.md` com frontmatter `name` e `description` |
+| Invocação explícita | `/refactor-arch` | `$refactor-arch` no chat do Codex |
+| Descoberta na interface | comando específico do Claude | seletor `/skills` ou digitação de `$` no Codex CLI/IDE |
+| Metadados da interface | não aplicável ao exemplo | `agents/openai.yaml` |
+
+A estrutura correta, copiada para cada projeto, é:
+
+```text
+<projeto>/
+└── .agents/
+    └── skills/
+        └── refactor-arch/
+            ├── SKILL.md
+            ├── agents/
+            │   └── openai.yaml
+            └── references/
+                ├── anti-pattern-catalog.md
+                ├── audit-report-template.md
+                ├── mvc-guidelines.md
+                ├── project-analysis.md
+                └── refactoring-playbook.md
+```
+
+O `SKILL.md` contém o contrato e o fluxo operacional. As referências concentram o conhecimento detalhado e são carregadas quando necessárias, evitando transformar a instrução principal em um documento excessivamente longo. O `agents/openai.yaml` fornece nome, descrição curta e prompt sugerido para a interface, além de desabilitar a invocação implícita para que a execução seja intencional.
+
+### Decisões de design
+
+- **Fluxo em três fases:** análise da stack, auditoria sem alterações e refatoração após confirmação.
+- **Barreira humana obrigatória:** a Skill encerra a Fase 2 e só inicia a Fase 3 após autorização explícita.
+- **Detecção por evidências:** manifestos, imports, entry points, rotas, testes e configuração determinam a stack; nomes de diretórios não são tratados como prova.
+- **Catálogo agnóstico:** 17 antipadrões cobrem arquitetura, segurança, dados, desempenho, validação, erros, qualidade e dependências obsoletas.
+- **Playbook executável:** 12 transformações descrevem sinais, risco, estado anterior, estado desejado e validação.
+- **MVC adaptado ao contexto:** em APIs, routes representam a fronteira de View, controllers coordenam casos de uso, services guardam regras e repositories isolam persistência.
+- **Preservação de contratos:** paths, métodos, payloads e respostas observáveis são protegidos por testes de caracterização; mudanças de segurança incompatíveis são registradas.
+- **Relatório rastreável:** todo achado recebe severidade, impacto, evidência com arquivo/linha, recomendação e critério de validação.
+
+### Como a Skill permanece agnóstica
+
+A Skill não prescreve Flask, Express, SQLite ou uma biblioteca de testes. Ela primeiro identifica os componentes equivalentes da stack e depois mapeia responsabilidades arquiteturais. As referências usam sinais conceituais — por exemplo, SQL dentro da rota, estado global mutável, segredo hardcoded, consulta N+1 ou API depreciada — e oferecem exemplos em mais de uma linguagem sem tornar esses exemplos regras exclusivas.
+
+### Principais desafios encontrados
+
+- Separar uma arquitetura apenas nominal de uma separação efetiva de responsabilidades.
+- Preservar contratos HTTP enquanto operações inseguras passaram a exigir autenticação ou foram bloqueadas.
+- Criar testes de caracterização para projetos originalmente sem suíte automatizada.
+- Diferenciar problemas reais de falsos positivos, registrando explicitamente quando SQL Injection ou API obsoleta não foi encontrada.
+- Tratar riscos de produção, como migração de schemas legados e dependências transitivas deprecated, sem misturá-los a uma refatoração arquitetural insegura.
+
+## Resultados
+
+### Relatórios gerados
+
+| Projeto | Stack detectada | Auditoria da Skill | Distribuição | Relatório |
+|---|---|---:|---|---|
+| `code-smells-project` | Python / Flask / SQLite | 14 achados | 4 críticos, 3 altos, 5 médios e 2 baixos | [Projeto 1](reports/audit-project-1.md) |
+| `ecommerce-api-legacy` | JavaScript / Node.js / Express / SQLite | 14 achados | 3 críticos, 4 altos, 5 médios e 2 baixos | [Projeto 2](reports/audit-project-2.md) |
+| `task-manager-api` | Python / Flask / Flask-SQLAlchemy / SQLite | 14 achados | 3 críticos, 2 altos, 7 médios e 2 baixos | [Projeto 3](reports/audit-project-3.md) |
+| **Total** | 2 stacks e 3 aplicações | **42 achados** | **10 críticos, 9 altos, 17 médios e 6 baixos** | — |
+
+A análise manual encontrou 40 problemas. A Skill confirmou os padrões principais e acrescentou dois achados médios no Projeto 1: acesso direto ao banco atravessando camadas e listagens sem paginação. Nos outros dois projetos, a quantidade e a distribuição por severidade coincidiram com a análise manual.
+
+### Antes e depois
+
+| Projeto | Antes | Depois |
+|---|---|---|
+| Projeto 1 | Módulos concentradores, SQL concatenado, senha em texto puro, conexão global e endpoints administrativos inseguros. | Application factory, Blueprints, controllers, services, repositories, schemas, SQL parametrizado, hash de senha e proteção administrativa. |
+| Projeto 2 | `AppManager` concentrava Express, SQLite, checkout, pagamento e relatórios; segredos e cartão apareciam no fluxo de logs. | Composition root assíncrono, routers, controllers, services, repositories, models, configuração por ambiente, transação atômica e logs seguros. |
+| Projeto 3 | Blueprints concentravam HTTP, ORM, validação e autorização; token fictício, MD5, N+1 e APIs depreciadas. | Application factory, autenticação assinada, autorização por papel/proprietário, schemas, camadas MVC, paginação, agregações e APIs atuais. |
+
+O detalhamento de cada transformação, incluindo a situação anterior, a solução e o estado dos achados, está na seção 12 de cada relatório.
+
+### Checklist de validação por projeto
+
+| Critério obrigatório | Projeto 1 | Projeto 2 | Projeto 3 |
+|---|:---:|:---:|:---:|
+| Linguagem e framework detectados | ✅ | ✅ | ✅ |
+| Domínio, arquivos e entry points inventariados | ✅ | ✅ | ✅ |
+| Relatório segue o template | ✅ | ✅ | ✅ |
+| Achados possuem arquivo e linha | ✅ | ✅ | ✅ |
+| Achados ordenados por severidade | ✅ | ✅ | ✅ |
+| Pelo menos cinco achados | ✅ | ✅ | ✅ |
+| Pelo menos um achado crítico ou alto | ✅ | ✅ | ✅ |
+| APIs/dependências deprecated verificadas | ✅ | ✅ | ✅ |
+| Pausa e confirmação antes da Fase 3 | ✅ | ✅ | ✅ |
+| Estrutura MVC adaptada à stack | ✅ | ✅ | ✅ |
+| Configuração separada e sem segredos literais | ✅ | ✅ | ✅ |
+| Models, persistência, routes e controllers separados | ✅ | ✅ | ✅ |
+| Tratamento de erros centralizado | ✅ | ✅ | ✅ |
+| Entry point claro | ✅ | ✅ | ✅ |
+| Aplicação inicia sem erros | ✅ | ✅ | ✅ |
+| Endpoints originais validados | 19/19 | 3/3 | 22/22 |
+
+### Evidências de execução
+
+Projeto 1 — suíte automatizada e smoke HTTP:
+
+```text
+Ran 9 tests ... OK
+HTTP_ENDPOINTS=19/19
+```
+
+Projeto 2 — suíte automatizada, boot pelo comando oficial e smoke HTTP:
+
+```text
+tests 15
+pass 15
+fail 0
+HTTP_ENDPOINTS=3/3 | HTTP_SCENARIOS=5 | NPM_START=OK | LOGS_SENSIVEIS=0
+```
+
+Projeto 3 — evidências visuais capturadas no terminal do VS Code:
+
+![Projeto 3 — 16 testes aprovados](evidencias/projeto-3/01-testes-16-ok.png)
+
+![Projeto 3 — smoke HTTP com 22 endpoints](evidencias/projeto-3/02-smoke-http-22-endpoints.png)
+
+No total, as três suítes executam **40 testes automatizados**. O comportamento agnóstico foi demonstrado em duas implementações Flask com mecanismos de persistência distintos e uma implementação Node.js/Express, mantendo o mesmo contrato de fases, severidades, relatório e validação.
+
+### Riscos remanescentes documentados
+
+- O banco legado do Projeto 1 requer uma migração explícita para receber todas as constraints do schema novo.
+- O Projeto 2 ainda possui nove dependências transitivas marcadas como deprecated; sua atualização foi separada da mudança arquitetural para evitar upgrade cego.
+- O Projeto 3 precisa de uma ferramenta formal de migrations antes de evoluções de schema em produção.
+
+Esses pontos não impedem o boot ou os testes atuais, mas devem permanecer visíveis na avaliação e em qualquer uso real dos projetos.
+
+## Como Executar
+
+### Pré-requisitos
+
+- Git e PowerShell.
+- OpenAI Codex CLI ou extensão/IDE com acesso ao repositório.
+- Python 3.12 ou compatível e `pip` para os Projetos 1 e 3.
+- Node.js e npm para o Projeto 2.
+
+Em um clone novo, instale as dependências dentro de cada projeto com os comandos indicados nas subseções de validação. Os ambientes virtuais, `.env` e bancos temporários não devem ser versionados.
+
+### Invocar a Skill no Codex
+
+O Codex descobre automaticamente Skills do repositório em `.agents/skills`. A menção `$refactor-arch` deve ser digitada **no chat do Codex**, não como um comando do PowerShell. Também é possível abrir o seletor `/skills` e escolher `refactor-arch`.
+
+Para o Projeto 1:
+
+```powershell
+Set-Location .\code-smells-project
+codex
+```
+
+Prompt no Codex:
+
+```text
+$refactor-arch Analise e audite este projeto. Gere o relatório em ../reports/audit-project-1.md e pare antes da Fase 3 para solicitar minha confirmação.
+```
+
+Para o Projeto 2:
+
+```powershell
+Set-Location .\ecommerce-api-legacy
+codex
+```
+
+Prompt no Codex:
+
+```text
+$refactor-arch Analise e audite este projeto. Gere o relatório em ../reports/audit-project-2.md e pare antes da Fase 3 para solicitar minha confirmação.
+```
+
+Para o Projeto 3:
+
+```powershell
+Set-Location .\task-manager-api
+codex
+```
+
+Prompt no Codex:
+
+```text
+$refactor-arch Analise e audite este projeto. Gere o relatório em ../reports/audit-project-3.md e pare antes da Fase 3 para solicitar minha confirmação.
+```
+
+Depois de revisar e aceitar o relatório, autorize explicitamente a Fase 3 no chat. A Skill não deve interpretar silêncio ou uma solicitação genérica como permissão para alterar arquivos.
+
+### Validar o Projeto 1
+
+```powershell
+Set-Location .\code-smells-project
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall -q app.py config.py database.py errors.py controllers models repositories routes schemas services tests
+```
+
+Para iniciar a API, defina ao menos um token administrativo não vazio e execute:
+
+```powershell
+$env:ADMIN_TOKEN = "defina-um-token-local"
+.\.venv\Scripts\python.exe app.py
+```
+
+A aplicação usa `http://127.0.0.1:5000` por padrão.
+
+### Validar o Projeto 2
+
+```powershell
+Set-Location .\ecommerce-api-legacy
+npm.cmd ci
+npm.cmd test
+$env:ADMIN_TOKEN = "defina-um-token-local"
+$env:SEED_USER_PASSWORD = "defina-uma-senha-local"
+npm.cmd start
+```
+
+A aplicação usa `http://localhost:3000` por padrão. As rotas administrativas exigem `x-admin-token` com o valor de `ADMIN_TOKEN`.
+
+### Validar o Projeto 3
+
+```powershell
+Set-Location .\task-manager-api
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edite apenas o `.env` local: gere uma `SECRET_KEY` com ao menos 32 caracteres e preencha as três senhas `SEED_*_PASSWORD` com valores distintos de ao menos 12 caracteres. Depois execute:
+
+```powershell
+.\.venv\Scripts\python.exe seed.py
+.\.venv\Scripts\python.exe -W "error::DeprecationWarning" -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m tests.smoke_http
+.\.venv\Scripts\python.exe app.py
+```
+
+A aplicação usa `http://127.0.0.1:5000` por padrão.
+
+## Entregáveis e checklist final
+
+- [x] Repositório derivado do projeto fornecido e configurado com `upstream`.
+- [x] Análise manual dos três projetos com severidade e relevância.
+- [x] Skill `refactor-arch` dentro de cada um dos três projetos.
+- [x] Cinco referências Markdown em cada cópia da Skill.
+- [x] Catálogo com 17 antipadrões, incluindo APIs/dependências obsoletas.
+- [x] Playbook com 12 transformações antes/depois.
+- [x] Template completo de relatório.
+- [x] Diretrizes MVC e heurísticas de análise detalhadas.
+- [x] Barreira de confirmação entre auditoria e refatoração.
+- [x] Três relatórios de auditoria em [`reports/`](reports/).
+- [x] Três projetos refatorados e validados.
+- [x] 40 testes automatizados aprovados.
+- [x] Smoke HTTP dos endpoints originais concluído nos três projetos.
+- [x] Logs ou capturas de execução incluídos no README.
+- [x] README com análise, construção, resultados e instruções de execução.
+- [x] Criar o commit final desta etapa após revisão do README.
+- [x] Fazer o push final para `origin/main`.
+- [ ] Confirmar em janela anônima que o [repositório no GitHub](https://github.com/edirlei/mba-ia-refactor-projects-skill) está público e que imagens e links renderizam.
+- [ ] Enviar a URL pública na plataforma da pós-graduação.
+
+<details>
+<summary>Enunciado original mantido como referência</summary>
 
 ## Contexto
 
@@ -528,3 +796,5 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 - **Projetos diferentes exigem adaptação** — a Fase 3 de um projeto já parcialmente organizado não vai ter as mesmas transformações de um monolito. Sua skill deve se adaptar ao contexto.
 - **Pedir confirmação na Fase 2 é obrigatório** — o humano deve revisar o relatório antes de qualquer modificação.
 - **Consulte as referências do curso** — revise a documentação oficial da ferramenta escolhida e os materiais das aulas para relembrar a estrutura e anatomia de uma skill.
+
+</details>
